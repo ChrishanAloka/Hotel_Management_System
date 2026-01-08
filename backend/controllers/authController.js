@@ -1,196 +1,122 @@
 // backend/controllers/authController.js
-const bcrypt = require("bcrypt");
-const jwt = require("jsonwebtoken");
 const User = require("../models/User");
-const SignupKey = require("../models/SignupKey");
+const jwt = require("jsonwebtoken");
 
-// STEP 1: Verify Reset Key
-exports.verifyResetKey = async (req, res) => {
-  const { key } = req.body;
-  try {
-    const validKey = await SignupKey.findOne({ key });
-    if (!validKey) return res.status(400).json({ message: "Invalid or expired key" });
-
-    res.status(200).json({ message: "Key is valid" });
-  } catch (err) {
-    res.status(500).json({ message: "Server error", error: err.message });
-  }
+// Generate JWT Token
+const generateToken = (id) => {
+  return jwt.sign({ id }, process.env.JWT_SECRET, {
+    expiresIn: "30d"
+  });
 };
 
-// STEP 2: Reset Password
-exports.resetPassword = async (req, res) => {
-  const { email, key, newPassword } = req.body;
+// Register user
+exports.register = async (req, res) => {
+  const { name, email, password, phone, role } = req.body;
+
+  if (!name || !email || !password || !phone) {
+    return res.status(400).json({ error: "Please provide all required fields" });
+  }
 
   try {
-    const validKey = await SignupKey.findOne({ key });
-    if (!validKey) return res.status(400).json({ message: "Invalid or expired key" });
+    const userExists = await User.findOne({ email });
 
-    const user = await User.findOne({ email });
-    if (!user) return res.status(404).json({ message: "User not found" });
-
-    user.password = newPassword;
-    await user.save();
-
-    // Remove the used key
-    await SignupKey.deleteOne({ key });
-
-    res.status(200).json({ message: "Password has been reset" });
-  } catch (err) {
-    res.status(500).json({ message: "Server error", error: err.message });
-  }
-};
-
-// controllers/authController.js
-exports.signup = async (req, res) => {
-  const { name, email, password, role , signupKey } = req.body;
-
-  console.log("Received body:", req.body); // ✅ Log this
-
-  if (["cashier", "kitchen"].includes(role)) {
-    if (!signupKey) {
-      return res.status(400).json({ error: "Signup key is required" });
+    if (userExists) {
+      return res.status(400).json({ error: "User already exists" });
     }
 
-    const validKey = await SignupKey.findOne({ key: signupKey });
+    const user = await User.create({
+      name,
+      email,
+      password,
+      phone,
+      role: role || "customer"
+    });
 
-    if (!validKey) {
-      return res.status(400).json({ error: "Invalid signup key" });
-    }
-  }
+    const token = generateToken(user._id);
 
-  try {
-    const user = new User({ name, email, password, role });
-    await user.save();
-    res.status(201).json({ message: `${role} user created` });
+    res.status(201).json({
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+      role: user.role,
+      token
+    });
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    res.status(500).json({ error: "Failed to register user" });
   }
 };
 
-// controllers/authController.js
-// backend/controllers/authController.js
-
+// Login user
 exports.login = async (req, res) => {
   const { email, password } = req.body;
-  const user = await User.findOne({ email });
 
-  if (!user || !(await user.comparePassword(password))) {
-    return res.status(400).json({ error: "Invalid credentials" });
+  if (!email || !password) {
+    return res.status(400).json({ error: "Please provide email and password" });
   }
 
-  // ❌ Block login if not active
-  if (!user.isActive) {
-    return res.status(403).json({ error: "Account is inactive" });
-  }
-
-  const token = jwt.sign(
-    { id: user._id, role: user.role },
-    process.env.JWT_SECRET,
-    { expiresIn: "1d" }
-  );
-
-  res.json({ token, role: user.role });
-};
-
-
-// controllers/authController.js
-
-// Get all keys
-exports.getSignupKeys = async (req, res) => {
   try {
-    const keys = await SignupKey.find();
-    res.json(keys);
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+
+    const isMatch = await user.comparePassword(password);
+
+    if (!isMatch) {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+
+    const token = generateToken(user._id);
+
+    res.json({
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+      role: user.role,
+      token
+    });
   } catch (err) {
-    res.status(500).json({ error: "Server error" });
+    res.status(500).json({ error: "Failed to login" });
   }
 };
 
-// Generate a new key
-exports.generateSignupKey = async (req, res) => {
-  const key = Math.random().toString(36).substring(2, 15); // simple random key
-  const newKey = new SignupKey({ key });
-  await newKey.save();
-  res.json(newKey);
-};
-
-// Delete a key
-exports.deleteSignupKey = async (req, res) => {
-  const { id } = req.params;
-  await SignupKey.findByIdAndDelete(id);
-  res.json({ message: "Key deleted" });
-};
-
-// backend/controllers/authController.js
-
-// Get all users
-exports.getUsers = async (req, res) => {
+// Get current user
+exports.getMe = async (req, res) => {
   try {
-    const users = await User.find({}, "name email role isActive"); // exclude password
-    res.json(users);
+    const user = await User.findById(req.user.id).select("-password");
+    res.json(user);
   } catch (err) {
-    res.status(500).json({ error: "Server error" });
+    res.status(500).json({ error: "Failed to get user data" });
   }
 };
 
-// Update user role
-exports.updateUserRole = async (req, res) => {
-  const { id } = req.params;
-  const { role } = req.body;
-
-  if (!["admin", "cashier", "kitchen"].includes(role)) {
-    return res.status(400).json({ error: "Invalid role" });
-  }
+// Update user profile
+exports.updateProfile = async (req, res) => {
+  const { name, phone } = req.body;
 
   try {
-    const updated = await User.findByIdAndUpdate(
-      id,
-      { role },
-      { new: true }
-    );
-    res.json({ role: updated.role });
-  } catch (err) {
-    res.status(500).json({ error: "Failed to update role" });
-  }
-};
+    const user = await User.findById(req.user.id);
 
-// Deactivate user
-exports.deactivateUser = async (req, res) => {
-  const { id } = req.params;
-
-  try {
-    const updated = await User.findByIdAndUpdate(
-      id,
-      { isActive: false },
-      { new: true }
-    );
-
-    if (!updated) return res.status(404).json({ error: "User not found" });
-
-    res.json(updated);
-  } catch (err) {
-    console.error("Deactivation failed:", err.message);
-    res.status(500).json({ error: "Failed to deactivate user" });
-  }
-};
-
-// Reactivate a user
-exports.reactivateUser = async (req, res) => {
-  const { id } = req.params;
-
-  try {
-    const updated = await User.findByIdAndUpdate(
-      id,
-      { isActive: true },
-      { new: true }
-    );
-
-    if (!updated) {
+    if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
 
-    res.json(updated);
+    user.name = name || user.name;
+    user.phone = phone || user.phone;
+
+    const updatedUser = await user.save();
+
+    res.json({
+      _id: updatedUser._id,
+      name: updatedUser.name,
+      email: updatedUser.email,
+      phone: updatedUser.phone,
+      role: updatedUser.role
+    });
   } catch (err) {
-    console.error("Reactivate failed:", err.message);
-    res.status(500).json({ error: "Failed to reactivate user" });
+    res.status(500).json({ error: "Failed to update profile" });
   }
 };
