@@ -1,41 +1,31 @@
 // frontend/src/pages/Rooms.js
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
+import { FaPlus, FaEdit, FaTrash, FaBed } from 'react-icons/fa';
 import { roomAPI } from '../services/api';
 import { toast } from 'react-toastify';
-import DatePicker from 'react-datepicker';
 
 const Rooms = () => {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
   const [rooms, setRooms] = useState([]);
+  const [filteredRooms, setFilteredRooms] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [checkInDate, setCheckInDate] = useState(
-    searchParams.get('checkIn') ? new Date(searchParams.get('checkIn')) : new Date()
-  );
-  const [checkOutDate, setCheckOutDate] = useState(
-    searchParams.get('checkOut') ? new Date(searchParams.get('checkOut')) : new Date(Date.now() + 86400000)
-  );
-  const [roomType, setRoomType] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [typeFilter, setTypeFilter] = useState('all');
 
   useEffect(() => {
     fetchRooms();
-  }, [checkInDate, checkOutDate, roomType]);
+  }, []);
+
+  useEffect(() => {
+    filterRooms();
+  }, [statusFilter, typeFilter, rooms]);
 
   const fetchRooms = async () => {
     try {
-      setLoading(true);
-      const params = {
-        checkInDate: checkInDate.toISOString(),
-        checkOutDate: checkOutDate.toISOString()
-      };
-      
-      if (roomType) {
-        params.roomType = roomType;
-      }
-
-      const response = await roomAPI.getAvailableRooms(params);
+      const response = await roomAPI.getRooms();
       setRooms(response.data);
+      setFilteredRooms(response.data);
     } catch (error) {
       toast.error('Failed to load rooms');
     } finally {
@@ -43,116 +33,192 @@ const Rooms = () => {
     }
   };
 
-  const handleBookNow = (roomId) => {
-    navigate(`/book/${roomId}?checkIn=${checkInDate.toISOString()}&checkOut=${checkOutDate.toISOString()}`);
+  const filterRooms = () => {
+    let filtered = rooms;
+    
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(room => room.status === statusFilter);
+    }
+    
+    if (typeFilter !== 'all') {
+      filtered = filtered.filter(room => room.roomType === typeFilter);
+    }
+    
+    setFilteredRooms(filtered);
   };
 
-  const calculateNights = () => {
-    const diffTime = Math.abs(checkOutDate - checkInDate);
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays;
+  const handleDelete = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this room?')) return;
+
+    try {
+      await roomAPI.deleteRoom(id);
+      toast.success('Room deleted successfully');
+      fetchRooms();
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Failed to delete room');
+    }
   };
 
-  if (loading) return <div className="loading">Loading rooms...</div>;
+  const updateRoomStatus = async (id, status) => {
+    try {
+      await roomAPI.updateRoomStatus(id, { status });
+      toast.success('Room status updated');
+      fetchRooms();
+    } catch (error) {
+      toast.error('Failed to update status');
+    }
+  };
+
+  const getStatusBadge = (status) => {
+    const classes = {
+      'Available': 'badge-success',
+      'Occupied': 'badge-danger',
+      'Reserved': 'badge-warning',
+      'Maintenance': 'badge-secondary',
+      'Out of Order': 'badge-danger',
+      'Cleaning': 'badge-info'
+    };
+    return <span className={`badge ${classes[status]}`}>{status}</span>;
+  };
+
+  if (loading) {
+    return <div className="loading"><div className="spinner"></div></div>;
+  }
 
   return (
-    <div className="container" style={{ paddingTop: '2rem' }}>
-      <h1 className="mb-4">Available Rooms</h1>
-
-      <div className="card mb-4">
-        <h3 className="card-title">Search Filters</h3>
-        <div className="grid grid-3">
-          <div className="form-group">
-            <label className="form-label">Check-in Date</label>
-            <DatePicker
-              selected={checkInDate}
-              onChange={(date) => setCheckInDate(date)}
-              minDate={new Date()}
-              className="form-control"
-              dateFormat="MMMM d, yyyy"
-            />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Check-out Date</label>
-            <DatePicker
-              selected={checkOutDate}
-              onChange={(date) => setCheckOutDate(date)}
-              minDate={checkInDate}
-              className="form-control"
-              dateFormat="MMMM d, yyyy"
-            />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Room Type</label>
-            <select
-              className="form-control"
-              value={roomType}
-              onChange={(e) => setRoomType(e.target.value)}
-            >
-              <option value="">All Types</option>
-              <option value="Single">Single</option>
-              <option value="Double">Double</option>
-              <option value="Suite">Suite</option>
-              <option value="Deluxe">Deluxe</option>
-              <option value="Presidential">Presidential</option>
-            </select>
-          </div>
+    <div>
+      <div className="topbar">
+        <h1 className="topbar-title">Rooms</h1>
+        <div className="topbar-actions">
+          <button onClick={() => navigate('/rooms/new')} className="btn btn-primary">
+            <FaPlus /> Add New Room
+          </button>
         </div>
-        <p className="mt-2"><strong>Nights:</strong> {calculateNights()}</p>
       </div>
 
-      {rooms.length === 0 ? (
-        <div className="card text-center">
-          <p>No rooms available for the selected dates.</p>
-        </div>
-      ) : (
-        <div className="grid grid-2">
-          {rooms.map((room) => (
-            <div key={room._id} className="room-card">
-              <div className="room-image">
-                {room.images && room.images[0] ? (
-                  <img src={room.images[0]} alt={room.roomType} />
-                ) : (
-                  <div style={{ 
-                    height: '200px', 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    justifyContent: 'center',
-                    background: '#ecf0f1',
-                    fontSize: '3rem'
-                  }}>
-                    🏨
-                  </div>
-                )}
-              </div>
-              <div className="room-details">
-                <h3 className="room-type">{room.roomType} - Room {room.roomNumber}</h3>
-                <p><strong>Capacity:</strong> {room.capacity} guests</p>
-                <p><strong>Floor:</strong> {room.floor}</p>
-                
-                {room.amenities && room.amenities.length > 0 && (
-                  <p><strong>Amenities:</strong> {room.amenities.join(', ')}</p>
-                )}
-                
-                {room.description && <p>{room.description}</p>}
-                
-                <div className="room-price">₹{room.price} / night</div>
-                <p style={{ fontSize: '0.9rem', color: '#7f8c8d' }}>
-                  Total: ₹{room.price * calculateNights()} for {calculateNights()} night(s)
-                </p>
-                
-                <button 
-                  onClick={() => handleBookNow(room._id)} 
-                  className="btn btn-primary"
-                  style={{ width: '100%', marginTop: '1rem' }}
-                >
-                  Book Now
-                </button>
-              </div>
+      <div className="content-wrapper">
+        <div className="filters">
+          <div className="filter-row">
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <select
+                className="form-control"
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+              >
+                <option value="all">All Status</option>
+                <option value="Available">Available</option>
+                <option value="Occupied">Occupied</option>
+                <option value="Reserved">Reserved</option>
+                <option value="Maintenance">Maintenance</option>
+                <option value="Cleaning">Cleaning</option>
+              </select>
             </div>
-          ))}
+            
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <select
+                className="form-control"
+                value={typeFilter}
+                onChange={(e) => setTypeFilter(e.target.value)}
+              >
+                <option value="all">All Types</option>
+                <option value="Single">Single</option>
+                <option value="Double">Double</option>
+                <option value="Twin">Twin</option>
+                <option value="Suite">Suite</option>
+                <option value="Deluxe">Deluxe</option>
+                <option value="Presidential">Presidential</option>
+              </select>
+            </div>
+          </div>
         </div>
-      )}
+
+        {filteredRooms.length === 0 ? (
+          <div className="empty-state">
+            <FaBed />
+            <h3>No rooms found</h3>
+            <p>Adjust filters or add a new room</p>
+          </div>
+        ) : (
+          <div className="card">
+            <div className="table-container">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Room Number</th>
+                    <th>Type</th>
+                    <th>Floor</th>
+                    <th>Base Price</th>
+                    <th>Capacity</th>
+                    <th>Status</th>
+                    <th>Cleaning</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredRooms.map((room) => (
+                    <tr key={room._id}>
+                      <td><strong>{room.roomNumber}</strong></td>
+                      <td>{room.roomType}</td>
+                      <td>{room.floor}</td>
+                      <td>Rs. {room.basePrice.toLocaleString()}/night</td>
+                      <td>{room.capacity.maxOccupancy} guests</td>
+                      <td>{getStatusBadge(room.status)}</td>
+                      <td>
+                        <span className={`badge ${
+                          room.cleaningStatus === 'Clean' ? 'badge-success' : 
+                          room.cleaningStatus === 'Dirty' ? 'badge-danger' : 
+                          'badge-warning'
+                        }`}>
+                          {room.cleaningStatus}
+                        </span>
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                          <button
+                            onClick={() => navigate(`/rooms/${room._id}/edit`)}
+                            className="btn btn-sm btn-primary"
+                            title="Edit"
+                          >
+                            <FaEdit />
+                          </button>
+                          
+                          {room.status === 'Maintenance' && (
+                            <button
+                              onClick={() => updateRoomStatus(room._id, 'Available')}
+                              className="btn btn-sm btn-success"
+                              title="Mark Available"
+                            >
+                              Available
+                            </button>
+                          )}
+                          
+                          {room.status === 'Available' && (
+                            <button
+                              onClick={() => updateRoomStatus(room._id, 'Maintenance')}
+                              className="btn btn-sm btn-warning"
+                              title="Maintenance"
+                            >
+                              Maintenance
+                            </button>
+                          )}
+                          
+                          <button
+                            onClick={() => handleDelete(room._id)}
+                            className="btn btn-sm btn-danger"
+                            title="Delete"
+                          >
+                            <FaTrash />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

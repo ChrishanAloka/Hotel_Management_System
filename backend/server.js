@@ -23,6 +23,12 @@ app.use("/api/rooms", require("./routes/roomRoutes"));
 app.use("/api/bookings", require("./routes/bookingRoutes"));
 app.use("/api/payments", require("./routes/paymentRoutes"));
 
+app.use("/api/guests", require("./routes/guestRoutes"));
+app.use("/api/travel-agents", require("./routes/travelAgentRoutes"));
+app.use("/api/reservations", require("./routes/reservationRoutes"));
+app.use("/api/guest-expenses", require("./routes/guestExpenseRoutes"));
+app.use("/api/invoices", require("./routes/invoiceRoutes"));
+
 // Health check route
 app.get("/", (req, res) => {
   res.json({ message: "Hotel Booking System API is running" });

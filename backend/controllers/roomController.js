@@ -1,19 +1,39 @@
 // backend/controllers/roomController.js
 const mongoose = require("mongoose");
 const Room = require("../models/Room");
-const Booking = require("../models/Booking");
+const Reservation = require("../models/Reservation");
 
 // Get all rooms
 exports.getRooms = async (req, res) => {
   try {
-    const rooms = await Room.find({}).sort({ roomNumber: 1 });
+    const rooms = await Room.find({ isActive: true })
+      .populate("currentReservation", "reservationNumber guest")
+      .sort({ roomNumber: 1 });
     res.json(rooms);
   } catch (err) {
     res.status(500).json({ error: "Failed to load rooms" });
   }
 };
 
-// Get available rooms by date range
+// Get rooms by status
+exports.getRoomsByStatus = async (req, res) => {
+  const { status } = req.query;
+
+  if (!status) {
+    return res.status(400).json({ error: "Status is required" });
+  }
+
+  try {
+    const rooms = await Room.find({ status, isActive: true })
+      .populate("currentReservation")
+      .sort({ roomNumber: 1 });
+    res.json(rooms);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to load rooms" });
+  }
+};
+
+// Get available rooms for date range
 exports.getAvailableRooms = async (req, res) => {
   const { checkInDate, checkOutDate, roomType } = req.query;
 
@@ -25,33 +45,54 @@ exports.getAvailableRooms = async (req, res) => {
     const checkIn = new Date(checkInDate);
     const checkOut = new Date(checkOutDate);
 
-    // Find all bookings that overlap with the requested dates
-    const overlappingBookings = await Booking.find({
-      bookingStatus: { $nin: ["cancelled", "checked-out"] },
-      $or: [
-        {
-          checkInDate: { $lte: checkOut },
-          checkOutDate: { $gte: checkIn }
-        }
+    // Normalize to start of day for accurate comparison
+    checkIn.setHours(0, 0, 0, 0);
+    checkOut.setHours(0, 0, 0, 0);
+
+    console.log('Searching availability for:', {
+      checkIn: checkIn.toISOString(),
+      checkOut: checkOut.toISOString()
+    });
+
+    // Find overlapping reservations
+    // A room is unavailable if there's ANY overlap with existing reservations
+    // Overlap exists when: (StartA < EndB) AND (EndA > StartB)
+    const overlappingReservations = await Reservation.find({
+      status: { $nin: ["Cancelled", "Checked-Out"] },
+      $and: [
+        { checkInDate: { $lt: checkOut } },  // Existing checkin is BEFORE requested checkout
+        { checkOutDate: { $gt: checkIn } }   // Existing checkout is AFTER requested checkin
       ]
-    }).select("room");
+    }).select("room reservationNumber checkInDate checkOutDate");
 
-    const bookedRoomIds = overlappingBookings.map(booking => booking.room);
+    console.log('Found overlapping reservations:', overlappingReservations.length);
+    overlappingReservations.forEach(res => {
+      console.log(`- ${res.reservationNumber}: ${res.checkInDate} to ${res.checkOutDate}, Room: ${res.room}`);
+    });
 
-    // Find rooms that are not booked
+    const bookedRoomIds = overlappingReservations
+      .filter(r => r.room)
+      .map(r => r.room.toString());
+
+    console.log('Booked room IDs:', bookedRoomIds);
+
     const query = {
       _id: { $nin: bookedRoomIds },
-      status: "available"
+      status: { $in: ["Available", "Cleaning"] },
+      isActive: true
     };
 
     if (roomType) {
       query.roomType = roomType;
     }
 
-    const availableRooms = await Room.find(query).sort({ price: 1 });
+    const availableRooms = await Room.find(query).sort({ roomNumber: 1 });
+
+    console.log('Available rooms found:', availableRooms.length);
 
     res.json(availableRooms);
   } catch (err) {
+    console.error('Error in getAvailableRooms:', err);
     res.status(500).json({ error: "Failed to load available rooms" });
   }
 };
@@ -61,7 +102,7 @@ exports.getRoom = async (req, res) => {
   const { id } = req.params;
 
   try {
-    const room = await Room.findById(id);
+    const room = await Room.findById(id).populate("currentReservation");
 
     if (!room) {
       return res.status(404).json({ error: "Room not found" });
@@ -73,30 +114,51 @@ exports.getRoom = async (req, res) => {
   }
 };
 
-// Add new room (Admin only)
+// Add new room
 exports.addRoom = async (req, res) => {
-  const { roomNumber, roomType, price, capacity, amenities, description, images, floor } = req.body;
+  const {
+    roomNumber,
+    roomType,
+    floor,
+    building,
+    basePrice,
+    weekendPrice,
+    capacity,
+    bedConfiguration,
+    roomSize,
+    view,
+    amenities,
+    features,
+    description,
+    images
+  } = req.body;
 
-  if (!roomNumber || !roomType || !price || !capacity || !floor) {
-    return res.status(400).json({ error: "All required fields must be provided" });
+  if (!roomNumber || !roomType || !floor || !basePrice || !capacity || !bedConfiguration) {
+    return res.status(400).json({ error: "Required fields are missing" });
   }
 
   try {
-    const roomExists = await Room.findOne({ roomNumber });
+    const existingRoom = await Room.findOne({ roomNumber });
 
-    if (roomExists) {
+    if (existingRoom) {
       return res.status(400).json({ error: "Room number already exists" });
     }
 
     const newRoom = new Room({
       roomNumber,
       roomType,
-      price,
+      floor,
+      building: building || "Main",
+      basePrice,
+      weekendPrice: weekendPrice || basePrice,
       capacity,
+      bedConfiguration,
+      roomSize,
+      view,
       amenities: amenities || [],
+      features: features || {},
       description,
-      images: images || [],
-      floor
+      images: images || []
     });
 
     await newRoom.save();
@@ -106,7 +168,7 @@ exports.addRoom = async (req, res) => {
   }
 };
 
-// Update room (Admin only)
+// Update room
 exports.updateRoom = async (req, res) => {
   const { id } = req.params;
   const updates = req.body;
@@ -123,11 +185,49 @@ exports.updateRoom = async (req, res) => {
 
     res.json(room);
   } catch (err) {
+    console.error("Update failed:", err.message);
     res.status(500).json({ error: "Failed to update room" });
   }
 };
 
-// Delete room (Admin only)
+// Update room status
+exports.updateRoomStatus = async (req, res) => {
+  const { id } = req.params;
+  const { status, cleaningStatus, maintenanceNotes } = req.body;
+
+  if (!status && !cleaningStatus) {
+    return res.status(400).json({ error: "Status or cleaning status is required" });
+  }
+
+  try {
+    const updates = {};
+    
+    if (status) updates.status = status;
+    if (cleaningStatus) {
+      updates.cleaningStatus = cleaningStatus;
+      if (cleaningStatus === "Clean") {
+        updates.lastCleanedAt = new Date();
+      }
+    }
+    if (maintenanceNotes) updates.maintenanceNotes = maintenanceNotes;
+    if (status === "Maintenance") updates.lastMaintenanceAt = new Date();
+
+    const room = await Room.findByIdAndUpdate(id, updates, {
+      new: true,
+      runValidators: true
+    });
+
+    if (!room) {
+      return res.status(404).json({ error: "Room not found" });
+    }
+
+    res.json(room);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to update room status" });
+  }
+};
+
+// Delete room
 exports.deleteRoom = async (req, res) => {
   const { id } = req.params;
 
@@ -138,19 +238,118 @@ exports.deleteRoom = async (req, res) => {
       return res.status(404).json({ error: "Room not found" });
     }
 
-    // Check if room has active bookings
-    const activeBookings = await Booking.findOne({
+    // Check for active reservations
+    const activeReservation = await Reservation.findOne({
       room: id,
-      bookingStatus: { $nin: ["cancelled", "checked-out"] }
+      status: { $nin: ["Cancelled", "Checked-Out"] }
     });
 
-    if (activeBookings) {
-      return res.status(400).json({ error: "Cannot delete room with active bookings" });
+    if (activeReservation) {
+      return res.status(400).json({ error: "Cannot delete room with active reservations" });
     }
 
-    await Room.findByIdAndDelete(id);
+    // Soft delete - mark as inactive
+    room.isActive = false;
+    await room.save();
+
     res.json({ message: "Room deleted successfully" });
   } catch (err) {
     res.status(500).json({ error: "Failed to delete room" });
+  }
+};
+
+// Get room statistics
+exports.getRoomStats = async (req, res) => {
+  try {
+    const totalRooms = await Room.countDocuments({ isActive: true });
+    const availableRooms = await Room.countDocuments({ status: "Available", isActive: true });
+    const occupiedRooms = await Room.countDocuments({ status: "Occupied", isActive: true });
+    const maintenanceRooms = await Room.countDocuments({ 
+      status: { $in: ["Maintenance", "Out of Order"] }, 
+      isActive: true 
+    });
+    const cleaningRooms = await Room.countDocuments({ status: "Cleaning", isActive: true });
+
+    const occupancyRate = totalRooms > 0 ? ((occupiedRooms / totalRooms) * 100).toFixed(2) : 0;
+
+    const roomTypeStats = await Room.aggregate([
+      { $match: { isActive: true } },
+      {
+        $group: {
+          _id: "$roomType",
+          count: { $sum: 1 },
+          occupied: {
+            $sum: { $cond: [{ $eq: ["$status", "Occupied"] }, 1, 0] }
+          }
+        }
+      }
+    ]);
+
+    res.json({
+      totalRooms,
+      availableRooms,
+      occupiedRooms,
+      maintenanceRooms,
+      cleaningRooms,
+      occupancyRate,
+      roomTypeStats
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to load room statistics" });
+  }
+};
+
+// Get housekeeping tasks
+exports.getHousekeepingTasks = async (req, res) => {
+  try {
+    // Dirty rooms - needs cleaning
+    const dirty = await Room.find({
+      cleaningStatus: "Dirty",
+      isActive: true
+    }).sort({ roomNumber: 1 });
+
+    // Pickup rooms - waiting for supplies/linen
+    const pickup = await Room.find({
+      cleaningStatus: "Pickup",
+      isActive: true
+    }).sort({ roomNumber: 1 });
+
+    // Clean rooms - needs inspection
+    const inspection = await Room.find({
+      cleaningStatus: "Clean",
+      status: "Cleaning",
+      isActive: true
+    }).sort({ roomNumber: 1 });
+
+    // Clean rooms - needs inspection
+    const inspected = await Room.find({
+      cleaningStatus: "Inspected",
+      status: "Cleaning",
+      isActive: true
+    }).sort({ roomNumber: 1 });
+
+    // Clean rooms - needs inspection
+    const available = await Room.find({
+      cleaningStatus: "Clean",
+      status: "Available",
+      isActive: true
+    }).sort({ roomNumber: 1 });
+
+    console.log('Housekeeping tasks:', {
+      dirty: dirty.length,
+      pickup: pickup.length,
+      inspection: inspection.length
+    });
+
+    res.json({
+      dirty,
+      pickup,
+      inspection,
+      inspected,
+      available
+    });
+  } catch (err) {
+    console.error('Housekeeping tasks error:', err);
+    res.status(500).json({ error: "Failed to load housekeeping tasks" });
   }
 };

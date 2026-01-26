@@ -116,7 +116,7 @@ const BookRoom = () => {
             <h3>{room.roomType} - Room {room.roomNumber}</h3>
             <p><strong>Capacity:</strong> {room.capacity} guests</p>
             <p><strong>Floor:</strong> {room.floor}</p>
-            <p><strong>Price:</strong> ₹{room.price} per night</p>
+            <p><strong>Price:</strong> Rs. {room.price} per night</p>
             
             {room.amenities && room.amenities.length > 0 && (
               <div>
@@ -212,10 +212,10 @@ const BookRoom = () => {
               <div className="card" style={{ background: '#f8f9fa', padding: '1rem' }}>
                 <h3>Total Price</h3>
                 <p style={{ fontSize: '2rem', color: '#27ae60', fontWeight: 'bold' }}>
-                  ₹{calculateTotalPrice()}
+                  Rs. {calculateTotalPrice()}
                 </p>
                 <p style={{ fontSize: '0.9rem', color: '#7f8c8d' }}>
-                  ₹{room.price} × {calculateNights()} night(s)
+                  Rs. {room.price} × {calculateNights()} night(s)
                 </p>
               </div>
 

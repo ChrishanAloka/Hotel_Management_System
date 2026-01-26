@@ -3,29 +3,60 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import 'react-datepicker/dist/react-datepicker.css';
 import './App.css';
 
 import { AuthProvider, useAuth } from './context/AuthContext';
-import Navbar from './components/Navbar';
-import Home from './pages/Home';
+import Sidebar from './components/Sidebar';
+
+// Import all pages
 import Login from './pages/Login';
-import Register from './pages/Register';
+import Dashboard from './pages/Dashboard';
+import Guests from './pages/Guests';
+import GuestForm from './pages/GuestForm';
+import GuestDetails from './pages/GuestDetails';
+import Reservations from './pages/Reservations';
+import ReservationForm from './pages/ReservationForm';
 import Rooms from './pages/Rooms';
-import BookRoom from './pages/BookRoom';
-import MyBookings from './pages/MyBookings';
-import ManageBookings from './pages/admin/ManageBookings';
-import ManageRooms from './pages/admin/ManageRooms';
+import RoomForm from './pages/RoomForm';
+import TravelAgents from './pages/TravelAgents';
+import TravelAgentForm from './pages/TravelAgentForm';
+import GuestExpenses from './pages/GuestExpenses';
+import ExpenseForm from './pages/ExpenseForm';
+import Invoices from './pages/Invoices';
+import InvoiceDetails from './pages/InvoiceDetails';
+import Housekeeping from './pages/HousekeepingEnhanced';
+import Reports from './pages/Reports';
+import ReservationDetails from './pages/ReservationDetails';
 
 // Protected Route Component
-const ProtectedRoute = ({ children, requireAuth = true, requireStaff = false }) => {
+const ProtectedRoute = ({ children }) => {
   const { isAuthenticated, isStaff } = useAuth();
 
-  if (requireAuth && !isAuthenticated) {
+  if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
 
-  if (requireStaff && !isStaff) {
-    return <Navigate to="/" replace />;
+  if (!isStaff) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return (
+    <div className="app-container">
+      <Sidebar />
+      <div className="main-content">
+        {children}
+      </div>
+    </div>
+  );
+};
+
+// Public Route Component
+const PublicRoute = ({ children }) => {
+  const { isAuthenticated } = useAuth();
+
+  if (isAuthenticated) {
+    return <Navigate to="/dashboard" replace />;
   }
 
   return children;
@@ -34,54 +65,227 @@ const ProtectedRoute = ({ children, requireAuth = true, requireStaff = false }) 
 function AppContent() {
   return (
     <Router>
-      <div className="App">
-        <Navbar />
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="/rooms" element={<Rooms />} />
-          
-          <Route 
-            path="/book/:roomId" 
-            element={
-              <ProtectedRoute>
-                <BookRoom />
-              </ProtectedRoute>
-            } 
-          />
-          
-          <Route 
-            path="/my-bookings" 
-            element={
-              <ProtectedRoute>
-                <MyBookings />
-              </ProtectedRoute>
-            } 
-          />
-          
-          <Route 
-            path="/admin/bookings" 
-            element={
-              <ProtectedRoute requireStaff={true}>
-                <ManageBookings />
-              </ProtectedRoute>
-            } 
-          />
-          
-          <Route 
-            path="/admin/rooms" 
-            element={
-              <ProtectedRoute requireStaff={true}>
-                <ManageRooms />
-              </ProtectedRoute>
-            } 
-          />
-          
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-        <ToastContainer position="top-right" autoClose={3000} />
-      </div>
+      <Routes>
+        {/* Public Routes */}
+        <Route 
+          path="/login" 
+          element={
+            <PublicRoute>
+              <Login />
+            </PublicRoute>
+          } 
+        />
+
+        {/* Dashboard */}
+        <Route 
+          path="/dashboard" 
+          element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          } 
+        />
+
+        {/* Guest Routes */}
+        <Route 
+          path="/guests" 
+          element={
+            <ProtectedRoute>
+              <Guests />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/guests/new" 
+          element={
+            <ProtectedRoute>
+              <GuestForm />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/guests/:id" 
+          element={
+            <ProtectedRoute>
+              <GuestDetails />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/guests/:id/edit" 
+          element={
+            <ProtectedRoute>
+              <GuestForm />
+            </ProtectedRoute>
+          } 
+        />
+
+        {/* Reservation Routes */}
+        <Route 
+          path="/reservations" 
+          element={
+            <ProtectedRoute>
+              <Reservations />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/reservations/new" 
+          element={
+            <ProtectedRoute>
+              <ReservationForm />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/reservations/:id" 
+          element={
+            <ProtectedRoute>
+              <ReservationDetails />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/reservations/:id/edit" 
+          element={
+            <ProtectedRoute>
+              <ReservationForm />
+            </ProtectedRoute>
+          } 
+        />
+
+        {/* Room Routes */}
+        <Route 
+          path="/rooms" 
+          element={
+            <ProtectedRoute>
+              <Rooms />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/rooms/new" 
+          element={
+            <ProtectedRoute>
+              <RoomForm />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/rooms/:id/edit" 
+          element={
+            <ProtectedRoute>
+              <RoomForm />
+            </ProtectedRoute>
+          } 
+        />
+
+        {/* Travel Agent Routes */}
+        <Route 
+          path="/travel-agents" 
+          element={
+            <ProtectedRoute>
+              <TravelAgents />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/travel-agents/new" 
+          element={
+            <ProtectedRoute>
+              <TravelAgentForm />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/travel-agents/:id/edit" 
+          element={
+            <ProtectedRoute>
+              <TravelAgentForm />
+            </ProtectedRoute>
+          } 
+        />
+
+        {/* Expense Routes */}
+        <Route 
+          path="/expenses" 
+          element={
+            <ProtectedRoute>
+              <GuestExpenses />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/expenses/new" 
+          element={
+            <ProtectedRoute>
+              <ExpenseForm />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/expenses/:id/edit" 
+          element={
+            <ProtectedRoute>
+              <ExpenseForm />
+            </ProtectedRoute>
+          } 
+        />
+
+        {/* Invoice Routes */}
+        <Route 
+          path="/invoices" 
+          element={
+            <ProtectedRoute>
+              <Invoices />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/invoices/:id" 
+          element={
+            <ProtectedRoute>
+              <InvoiceDetails />
+            </ProtectedRoute>
+          } 
+        />
+
+        {/* Housekeeping Route */}
+        <Route 
+          path="/housekeeping" 
+          element={
+            <ProtectedRoute>
+              <Housekeeping />
+            </ProtectedRoute>
+          } 
+        />
+
+        {/* Reports Route */}
+        <Route 
+          path="/reports" 
+          element={
+            <ProtectedRoute>
+              <Reports />
+            </ProtectedRoute>
+          } 
+        />
+
+        {/* Default Routes */}
+        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      </Routes>
+      
+      <ToastContainer 
+        position="top-right" 
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+      />
     </Router>
   );
 }

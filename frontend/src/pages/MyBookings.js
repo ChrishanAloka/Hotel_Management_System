@@ -94,7 +94,7 @@ const MyBookings = () => {
                 <p><strong>Check-in:</strong> {format(new Date(booking.checkInDate), 'MMMM d, yyyy')}</p>
                 <p><strong>Check-out:</strong> {format(new Date(booking.checkOutDate), 'MMMM d, yyyy')}</p>
                 <p><strong>Guests:</strong> {booking.numberOfGuests}</p>
-                <p><strong>Total Price:</strong> ₹{booking.totalPrice}</p>
+                <p><strong>Total Price:</strong> Rs. {booking.totalPrice}</p>
                 <p><strong>Payment Method:</strong> {booking.paymentMethod}</p>
                 <p><strong>Payment Status:</strong> {getPaymentStatusBadge(booking.paymentStatus)}</p>
                 

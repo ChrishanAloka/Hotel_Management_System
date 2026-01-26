@@ -157,7 +157,7 @@ const ManageRooms = () => {
               </div>
 
               <div className="form-group">
-                <label className="form-label">Price per Night (₹)</label>
+                <label className="form-label">Price per Night (Rs. )</label>
                 <input
                   type="number"
                   name="price"
@@ -267,7 +267,7 @@ const ManageRooms = () => {
                 <tr key={room._id}>
                   <td>{room.roomNumber}</td>
                   <td>{room.roomType}</td>
-                  <td>₹{room.price}</td>
+                  <td>Rs. {room.price}</td>
                   <td>{room.capacity}</td>
                   <td>{room.floor}</td>
                   <td>

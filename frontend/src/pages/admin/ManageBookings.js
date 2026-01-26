@@ -123,7 +123,7 @@ const ManageBookings = () => {
                     <td>{format(new Date(booking.checkInDate), 'MMM d, yyyy')}</td>
                     <td>{format(new Date(booking.checkOutDate), 'MMM d, yyyy')}</td>
                     <td>{booking.numberOfGuests}</td>
-                    <td>₹{booking.totalPrice}</td>
+                    <td>Rs. {booking.totalPrice}</td>
                     <td>
                       <select
                         className="form-control"
