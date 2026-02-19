@@ -29,7 +29,7 @@ const Sidebar = () => {
     { path: '/invoices', icon: <FaFileInvoiceDollar />, label: 'Invoices' },
     { path: '/travel-agents', icon: <FaPlane />, label: 'Travel Agents' },
     { path: '/housekeeping', icon: <FaBroom />, label: 'Housekeeping' },
-    { path: '/reports', icon: <FaChartBar />, label: 'Reports' },
+    // { path: '/reports', icon: <FaChartBar />, label: 'Reports' },
   ];
 
   const isActive = (path) => {

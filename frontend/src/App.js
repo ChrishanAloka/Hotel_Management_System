@@ -10,6 +10,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import Sidebar from './components/Sidebar';
 
 // Import all pages
+import Register from './pages/Register';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Guests from './pages/Guests';
@@ -271,8 +272,16 @@ function AppContent() {
         />
 
         {/* Default Routes */}
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
-        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        <Route 
+          path="/register" 
+          element={
+            <PublicRoute>
+              <Register />
+            </PublicRoute>
+          } 
+        />
+        <Route path="/" element={<Navigate to="/login" replace />} />
+        <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
       
       <ToastContainer 

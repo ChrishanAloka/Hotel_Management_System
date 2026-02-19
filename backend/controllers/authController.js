@@ -29,12 +29,22 @@ exports.register = async (req, res) => {
       email,
       password,
       phone,
-      role: role || "customer"
+      role: role || "admin"
     });
 
+    // const token = generateToken(user._id);
+
+    // res.status(201).json({
+    //   _id: user._id,
+    //   name: user.name,
+    //   email: user.email,
+    //   phone: user.phone,
+    //   role: user.role,
+    //   token
+    // });
     const token = generateToken(user._id);
 
-    res.status(201).json({
+    res.json({
       _id: user._id,
       name: user.name,
       email: user.email,
@@ -42,6 +52,7 @@ exports.register = async (req, res) => {
       role: user.role,
       token
     });
+    
   } catch (err) {
     res.status(500).json({ error: "Failed to register user" });
   }
